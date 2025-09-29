@@ -1,0 +1,96 @@
+﻿using Discord;
+using Discord.WebSocket;
+using DiscordArchitect.Options;
+using DiscordArchitect.Services;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+namespace DiscordArchitect.Hosting;
+
+/// <summary>
+/// Provides a hosted service that manages the lifecycle of a Discord bot, including connecting to Discord, handling
+/// readiness, and performing initial server setup tasks.
+/// </summary>
+/// <remarks>This service is intended to be registered with the application's dependency injection container and
+/// started automatically as part of the application's hosting environment. It handles logging in to Discord, waiting
+/// for the client to become ready, and performing initial operations such as cloning a category on the configured
+/// server. The service should be stopped gracefully to ensure the Discord client disconnects cleanly.</remarks>
+public sealed class DiscordHostedService : IHostedService
+{
+    private readonly ILogger<DiscordHostedService> _log;
+    private readonly DiscordSocketClient _client;
+    private readonly DiscordOptions _opt;
+    private readonly Prompt _prompt;
+    private readonly CategoryCloner _cloner;
+    private TaskCompletionSource<bool>? _readyTcs;
+
+    public DiscordHostedService(
+        ILogger<DiscordHostedService> log,
+        DiscordSocketClient client,
+        IOptions<DiscordOptions> opt,
+        Prompt prompt,
+        CategoryCloner cloner)
+    {
+        _log = log;
+        _client = client;
+        _opt = opt.Value;
+        _prompt = prompt;
+        _cloner = cloner;
+    }
+
+    /// <summary>
+    /// Asynchronously logs in to the Discord client, waits for the client to become ready, and initiates the cloning of
+    /// a server category based on user input.
+    /// </summary>
+    /// <remarks>This method must be called before performing operations that require the Discord client to be
+    /// connected and ready. If the specified server cannot be found, the method logs an error and completes without
+    /// performing the clone operation. The method does not throw if the operation is canceled; cancellation is
+    /// cooperative via the provided token.</remarks>
+    /// <param name="ct">A cancellation token that can be used to cancel the asynchronous operation.</param>
+    /// <returns>A task that represents the asynchronous start operation.</returns>
+    public async Task StartAsync(CancellationToken ct)
+    {
+        _readyTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        _client.Ready += OnReady;
+
+        await _client.LoginAsync(TokenType.Bot, _opt.Token);
+        await _client.StartAsync();
+
+        await _readyTcs.Task; // wait for Ready
+
+        var server = _client.GetGuild(_opt.ServerId);
+        if (server == null)
+        {
+            _log.LogError("❌ Server {ServerId} not found.", _opt.ServerId);
+            return;
+        }
+
+        var newCategoryName = await _prompt.GetNewCategoryNameAsync();
+        await _cloner.CloneAsync(server, _opt.SourceCategoryName, newCategoryName, _opt);
+        _log.LogInformation("✅ Done. Press ENTER to exit…");
+    }
+
+    /// <summary>
+    /// Asynchronously stops the client and logs out, releasing any associated resources.
+    /// </summary>
+    /// <param name="ct">A cancellation token that can be used to cancel the stop operation.</param>
+    /// <returns>A task that represents the asynchronous stop operation.</returns>
+    public async Task StopAsync(CancellationToken ct)
+    {
+        _client.Ready -= OnReady;
+        await _client.StopAsync();
+        await _client.LogoutAsync();
+    }
+
+    /// <summary>
+    /// Handles actions to perform when the gateway connection is ready.
+    /// </summary>
+    /// <returns>A completed task that represents the asynchronous operation.</returns>
+    private Task OnReady()
+    {
+        _log.LogInformation("✅ Gateway Ready as {User}", _client.CurrentUser.Username);
+        _readyTcs?.TrySetResult(true);
+        return Task.CompletedTask;
+    }
+}
