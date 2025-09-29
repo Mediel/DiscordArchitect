@@ -3,6 +3,11 @@
     <File Path=".gitignore" />
     <File Path="README.md" />
   </Folder>
+  <Folder Name="/Solution Items/.github/" />
+  <Folder Name="/Solution Items/.github/workflows/">
+    <File Path="alerts.yml" />
+    <File Path="build.yml" />
+  </Folder>
   <Project Path="DiscordArchitect.Tests/DiscordArchitect.Tests.csproj" Id="02f5acc5-9f9f-46bb-bbb7-b5bea6d061cd" />
   <Project Path="DiscordArchitect/DiscordArchitect.csproj" />
 </Solution>

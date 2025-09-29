@@ -1,0 +1,87 @@
+﻿name: "⚠️ Alerts — Discord (workflow_run)"
+
+on:
+  workflow_run:
+    workflows:
+      - "Build & Test" 
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  notify:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    env:
+      WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_ALERTS }}
+
+    steps:
+      - name: Skip if webhook missing
+        if: ${{ env.WEBHOOK_URL == '' }}
+        run: echo "::warning::DISCORD_WEBHOOK_ALERTS is not set — skipping notification."
+
+      - name: Prepare Discord payload (commit msg + failing step)
+        id: prep
+        if: ${{ env.WEBHOOK_URL != '' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const run = context.payload.workflow_run;
+            const runId = run.id;
+            const sha = run.head_sha;
+
+            // 1) First line of commit message
+            let commitMsg = "";
+            try {
+              const { data: c } = await github.rest.repos.getCommit({ owner, repo, ref: sha });
+              commitMsg = (c.commit?.message?.split('\n')[0] ?? "").trim();
+            } catch {}
+
+            // 2) First failing job/step
+            let failedJob = "", failedStep = "";
+            try {
+              const { data } = await github.rest.actions.listJobsForWorkflowRun({
+                owner, repo, run_id: runId, per_page: 100
+              });
+              const job = (data.jobs || []).find(j => j.conclusion && j.conclusion !== 'success');
+              if (job) {
+                failedJob = job.name || "";
+                const step = (job.steps || []).find(s => s.conclusion === 'failure')
+                         || (job.steps || []).find(s => s.conclusion && s.conclusion !== 'success');
+                if (step) failedStep = step.name || "";
+              }
+            } catch {}
+
+            const embed = {
+              title: `🚨 FAILED: ${run.name}`,
+              url: `https://github.com/${owner}/${repo}/actions/runs/${runId}`,
+              color: 15158332,
+              description: commitMsg ? `**Commit:** ${commitMsg}` : undefined,
+              fields: [
+                { name: "Repository", value: `${owner}/${repo}`, inline: true },
+                { name: "Branch",     value: run.head_branch || "-", inline: true },
+                { name: "Actor",      value: run.actor?.login || "-", inline: true },
+                { name: "Commit",     value: `\`${sha.substring(0,7)}\``, inline: true },
+              ].concat(
+                (failedJob || failedStep)
+                  ? [{ name: "Cause", value: `${failedJob}${failedJob && failedStep ? " → " : ""}${failedStep}`.trim(), inline: false }]
+                  : []
+              ),
+              timestamp: new Date().toISOString()
+            };
+
+            const payload = { embeds: [embed] };
+            fs.writeFileSync('discord_payload.json', JSON.stringify(payload));
+            core.setOutput('payload_file', 'discord_payload.json');
+
+      - name: Send to Discord
+        if: ${{ env.WEBHOOK_URL != '' }}
+        continue-on-error: true
+        run: |
+          curl -sS -H "Content-Type: application/json" \
+               -d @${{ steps.prep.outputs.payload_file }} \
+               "$WEBHOOK_URL" || echo "warn: discord notify failed"
