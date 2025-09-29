@@ -1,6 +1,7 @@
 ﻿using Discord;
 using Discord.WebSocket;
 using DiscordArchitect.Options;
+using DiscordArchitect.Services.Pure;
 using Microsoft.Extensions.Logging;
 
 namespace DiscordArchitect.Services
@@ -121,31 +122,33 @@ namespace DiscordArchitect.Services
                 }
             }
 
-            // 4) Collect channels from source (preserve order)
-            var text = server.TextChannels
-                .Where(c => c.CategoryId == source.Id && c is not SocketNewsChannel)
-                .Cast<SocketGuildChannel>();
+            // 4) Collect channels from source (preserve order) — use Pure helper
+            var collect = new List<ChannelOrdering.Chan>();
 
-            var news = server.TextChannels
-                .Where(c => c.CategoryId == source.Id)
-                .OfType<SocketNewsChannel>()
-                .Cast<SocketGuildChannel>();
+            // text bez news
+            foreach (var t in server.TextChannels.Where(c => c.CategoryId == source.Id && c is not SocketNewsChannel))
+                collect.Add(new ChannelOrdering.Chan(t.Position, "text", t));
 
-            var voice = server.VoiceChannels
-                .Where(c => c.CategoryId == source.Id)
-                .Cast<SocketGuildChannel>();
+            // news
+            foreach (var n in server.TextChannels.Where(c => c.CategoryId == source.Id).OfType<SocketNewsChannel>())
+                collect.Add(new ChannelOrdering.Chan(n.Position, "news", n));
 
-            var forum = server.ForumChannels
-                .Where(c => c.CategoryId == source.Id)
-                .Cast<SocketGuildChannel>();
+            // voice
+            foreach (var v in server.VoiceChannels.Where(c => c.CategoryId == source.Id))
+                collect.Add(new ChannelOrdering.Chan(v.Position, "voice", v));
 
-            var ordered = text.Concat(news).Concat(voice).Concat(forum)
-                              .OrderBy(c => c.Position)
-                              .ToList();
+            // forum
+            foreach (var f in server.ForumChannels.Where(c => c.CategoryId == source.Id))
+                collect.Add(new ChannelOrdering.Chan(f.Position, "forum", f));
+
+            // order
+            var ordered = ChannelOrdering.Order(collect);
 
             // 5) Create channels and (optionally) sync to category
-            foreach (var ch in ordered)
+            foreach (var item in ordered)
             {
+                var ch = item.Channel;
+
                 switch (ch)
                 {
                     case SocketNewsChannel newsCh:
@@ -154,14 +157,9 @@ namespace DiscordArchitect.Services
                             {
                                 props.CategoryId = newCategory.Id;
                                 props.Topic = newsCh.Topic;
-                                // inherit permissions from category (no per-channel overwrites here)
                             });
-
                             _log.LogInformation("📰 Cloned announcement channel: {Name}", created.Name);
-
-                            if (opt.SyncChannelsToCategory)
-                                await created.SyncPermissionsAsync();
-
+                            if (opt.SyncChannelsToCategory) await created.SyncPermissionsAsync();
                             break;
                         }
 
@@ -173,14 +171,9 @@ namespace DiscordArchitect.Services
                                 props.Topic = textCh.Topic;
                                 props.SlowModeInterval = textCh.SlowModeInterval;
                                 props.IsNsfw = textCh.IsNsfw;
-                                // inherit permissions from category
                             });
-
                             _log.LogInformation("💬 Cloned text channel: {Name}", created.Name);
-
-                            if (opt.SyncChannelsToCategory)
-                                await created.SyncPermissionsAsync();
-
+                            if (opt.SyncChannelsToCategory) await created.SyncPermissionsAsync();
                             break;
                         }
 
@@ -191,14 +184,9 @@ namespace DiscordArchitect.Services
                                 props.CategoryId = newCategory.Id;
                                 props.Bitrate = voiceCh.Bitrate;
                                 props.UserLimit = voiceCh.UserLimit;
-                                // inherit permissions from category
                             });
-
                             _log.LogInformation("🔊 Cloned voice channel: {Name}", created.Name);
-
-                            if (opt.SyncChannelsToCategory)
-                                await created.SyncPermissionsAsync();
-
+                            if (opt.SyncChannelsToCategory) await created.SyncPermissionsAsync();
                             break;
                         }
 
@@ -210,15 +198,10 @@ namespace DiscordArchitect.Services
                                 props.Topic = forumCh.Topic;
                                 if (forumCh.DefaultSortOrder.HasValue)
                                     props.DefaultSortOrder = forumCh.DefaultSortOrder.Value;
-                                // inherit permissions from category
                             });
-
                             _log.LogInformation("🗂️  Created forum channel: {Name} (id: {Id})", createdForum.Name, createdForum.Id);
+                            if (opt.SyncChannelsToCategory) await createdForum.SyncPermissionsAsync();
 
-                            if (opt.SyncChannelsToCategory)
-                                await createdForum.SyncPermissionsAsync();
-
-                            // Apply available tags (REST PATCH)
                             if (forumCh.Tags.Any())
                             {
                                 var tagsPayload = forumCh.Tags.Select(t =>

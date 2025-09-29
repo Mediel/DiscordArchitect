@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace DiscordArchitect.Services;
@@ -16,18 +17,21 @@ public sealed class ForumTagService
     public ForumTagService(HttpClient http) => _http = http;
 
     /// <summary>
-    /// Updates the set of available tags for the specified channel asynchronously.
+    /// Updates the set of available tags for the specified channel using a PATCH request to the Discord API.
     /// </summary>
-    /// <remarks>This method sends a PATCH request to the Discord API to update the available tags for the
-    /// specified channel. The operation may fail if the channel does not exist, the payload is invalid, or if the
-    /// caller lacks sufficient permissions.</remarks>
+    /// <remarks>This method sends a PATCH request to the Discord API to update the available tags for a
+    /// channel. The operation may fail if the channel does not exist, the payload is invalid, or the caller lacks
+    /// sufficient permissions.</remarks>
     /// <param name="channelId">The unique identifier of the channel whose available tags are to be updated.</param>
-    /// <param name="tagsPayload">An array containing the tag objects to set as available for the channel. Each object should represent a tag in
-    /// the format expected by the Discord API.</param>
-    /// <param name="ct">A cancellation token that can be used to cancel the operation.</param>
+    /// <param name="tagsPayload">An array of objects representing the tags to set as available for the channel. The structure of each object must
+    /// conform to the Discord API's requirements for channel tags.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result is <see langword="true"/> if the tags were
-    /// updated successfully; otherwise, <see langword="false"/>.</returns>
-    public async Task<bool> PatchAvailableTagsAsync(ulong channelId, object[] tagsPayload, CancellationToken ct = default)
+    /// successfully updated; otherwise, <see langword="false"/>.</returns>
+    public async Task<bool> PatchAvailableTagsAsync(
+            ulong channelId,
+            object[] tagsPayload,
+            CancellationToken cancellationToken = default)
     {
         var body = new { available_tags = tagsPayload };
         var json = JsonSerializer.Serialize(body, new JsonSerializerOptions
@@ -37,14 +41,15 @@ public sealed class ForumTagService
 
         using var req = new HttpRequestMessage(HttpMethod.Patch, $"https://discord.com/api/v10/channels/{channelId}")
         {
-            Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
 
-        var res = await _http.SendAsync(req, ct);
+        var res = await _http.SendAsync(req, cancellationToken);
         if (res.IsSuccessStatusCode) return true;
 
-        var text = await SafeReadAsync(res);
-        Console.WriteLine($"PATCH tags failed: {res.StatusCode} - {text}");
+        // volitelné: číst body také s ct
+        var txt = await res.Content.ReadAsStringAsync(cancellationToken);
+        Console.WriteLine($"PATCH tags failed: {res.StatusCode} - {txt}");
         return false;
     }
 
