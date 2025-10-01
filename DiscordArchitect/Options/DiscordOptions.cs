@@ -33,4 +33,9 @@ public sealed class DiscordOptions
     /// Gets or sets a value indicating whether channels should be synchronized with their parent category.
     /// </summary>
     public bool SyncChannelsToCategory { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the application should run in test mode, allowing for cleanup of created resources.
+    /// </summary>
+    public bool TestMode { get; set; } = false;
 }

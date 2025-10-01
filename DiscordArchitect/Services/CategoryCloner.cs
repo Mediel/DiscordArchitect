@@ -51,6 +51,20 @@ namespace DiscordArchitect.Services
         /// channels have been cloned.</returns>
         public async Task CloneAsync(SocketGuild server, string sourceCategoryName, string newCategoryName, DiscordOptions opt)
         {
+            var result = await CloneWithTrackingAsync(server, sourceCategoryName, newCategoryName, opt);
+        }
+
+        /// <summary>
+        /// Asynchronously clones a category and its channels from a source category in the specified Discord server,
+        /// creating a new category with the given name and applying the provided options, while tracking created resources.
+        /// </summary>
+        /// <param name="server">The Discord server in which the category and its channels will be cloned.</param>
+        /// <param name="sourceCategoryName">The name of the existing category to clone.</param>
+        /// <param name="newCategoryName">The name for the newly created category.</param>
+        /// <param name="opt">Options that control cloning behavior.</param>
+        /// <returns>A task that represents the asynchronous clone operation, containing information about created resources.</returns>
+        public async Task<CreatedResources?> CloneWithTrackingAsync(SocketGuild server, string sourceCategoryName, string newCategoryName, DiscordOptions opt)
+        {
             _diag.PrintGuildPermsAndRoleStack(server);
 
             var source = server.CategoryChannels
@@ -61,11 +75,17 @@ namespace DiscordArchitect.Services
                 _log.LogError("❌ Source category '{Name}' not found.", sourceCategoryName);
                 foreach (var c in server.CategoryChannels.OrderBy(c => c.Position))
                     _log.LogInformation(" - {Cat}", c.Name);
-                return;
+                return null;
             }
+
+            // Track created resources for cleanup
+            var createdChannels = new List<ulong>();
+            ulong? createdCategoryId = null;
+            ulong? createdRoleId = null;
 
             // 1) Create target category
             var newCategory = await server.CreateCategoryChannelAsync(newCategoryName);
+            createdCategoryId = newCategory.Id;
             _log.LogInformation("📁 Created category: {Name} (id: {Id})", newCategory.Name, newCategory.Id);
 
             // 2) Ensure bot + everyone toggles on the category
@@ -109,6 +129,7 @@ namespace DiscordArchitect.Services
                         );
 
                         categoryRole = server.GetRole(createdRole.Id);
+                        createdRoleId = createdRole.Id;
                         _log.LogInformation("🧩 Created role '{Role}' (id: {Id})", categoryRole!.Name, categoryRole!.Id);
 
                         await _perms.GrantCategoryRoleAsync((ICategoryChannel)newCategory, categoryRole);
@@ -158,6 +179,7 @@ namespace DiscordArchitect.Services
                                 props.CategoryId = newCategory.Id;
                                 props.Topic = newsCh.Topic;
                             });
+                            createdChannels.Add(created.Id);
                             _log.LogInformation("📰 Cloned announcement channel: {Name}", created.Name);
                             if (opt.SyncChannelsToCategory) await created.SyncPermissionsAsync();
                             break;
@@ -172,6 +194,7 @@ namespace DiscordArchitect.Services
                                 props.SlowModeInterval = textCh.SlowModeInterval;
                                 props.IsNsfw = textCh.IsNsfw;
                             });
+                            createdChannels.Add(created.Id);
                             _log.LogInformation("💬 Cloned text channel: {Name}", created.Name);
                             if (opt.SyncChannelsToCategory) await created.SyncPermissionsAsync();
                             break;
@@ -185,6 +208,7 @@ namespace DiscordArchitect.Services
                                 props.Bitrate = voiceCh.Bitrate;
                                 props.UserLimit = voiceCh.UserLimit;
                             });
+                            createdChannels.Add(created.Id);
                             _log.LogInformation("🔊 Cloned voice channel: {Name}", created.Name);
                             if (opt.SyncChannelsToCategory) await created.SyncPermissionsAsync();
                             break;
@@ -199,6 +223,7 @@ namespace DiscordArchitect.Services
                                 if (forumCh.DefaultSortOrder.HasValue)
                                     props.DefaultSortOrder = forumCh.DefaultSortOrder.Value;
                             });
+                            createdChannels.Add(createdForum.Id);
                             _log.LogInformation("🗂️  Created forum channel: {Name} (id: {Id})", createdForum.Name, createdForum.Id);
                             if (opt.SyncChannelsToCategory) await createdForum.SyncPermissionsAsync();
 
@@ -232,6 +257,8 @@ namespace DiscordArchitect.Services
             }
 
             _log.LogInformation("✅ Category '{New}' cloned from '{Src}' in source order.", newCategoryName, sourceCategoryName);
+            
+            return new CreatedResources(createdCategoryId, createdChannels, createdRoleId);
         }
     }
 }

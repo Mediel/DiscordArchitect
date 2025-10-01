@@ -23,6 +23,7 @@ public sealed class DiscordHostedService : IHostedService
     private readonly DiscordOptions _opt;
     private readonly Prompt _prompt;
     private readonly CategoryCloner _cloner;
+    private readonly CleanupService _cleanup;
     private TaskCompletionSource<bool>? _readyTcs;
 
     public DiscordHostedService(
@@ -30,13 +31,15 @@ public sealed class DiscordHostedService : IHostedService
         DiscordSocketClient client,
         IOptions<DiscordOptions> opt,
         Prompt prompt,
-        CategoryCloner cloner)
+        CategoryCloner cloner,
+        CleanupService cleanup)
     {
         _log = log;
         _client = client;
         _opt = opt.Value;
         _prompt = prompt;
         _cloner = cloner;
+        _cleanup = cleanup;
     }
 
     /// <summary>
@@ -67,7 +70,44 @@ public sealed class DiscordHostedService : IHostedService
         }
 
         var newCategoryName = await _prompt.GetNewCategoryNameAsync();
-        await _cloner.CloneAsync(server, _opt.SourceCategoryName, newCategoryName, _opt);
+        
+        if (_opt.TestMode)
+        {
+            _log.LogInformation("🧪 Running in TEST MODE - resources will be tracked for cleanup");
+            var createdResources = await _cloner.CloneWithTrackingAsync(server, _opt.SourceCategoryName, newCategoryName, _opt);
+            
+            if (createdResources != null)
+            {
+                _log.LogInformation("✅ Test mode: Resources created successfully!");
+                _log.LogInformation("   📁 Category: {CategoryId}", createdResources.CategoryId);
+                _log.LogInformation("   📺 Channels: {ChannelCount}", createdResources.Channels.Count);
+                if (createdResources.RoleId.HasValue)
+                    _log.LogInformation("   🧩 Role: {RoleId}", createdResources.RoleId);
+                
+                Console.WriteLine();
+                Console.WriteLine("🔍 Please verify the created resources in Discord, then press ENTER to continue...");
+                Console.ReadLine();
+                
+                Console.WriteLine();
+                Console.Write("🗑️  Do you want to delete the created resources? (y/n): ");
+                var response = Console.ReadLine();
+                
+                if (response?.ToLowerInvariant().StartsWith("y") == true)
+                {
+                    _log.LogInformation("🧹 Starting cleanup...");
+                    await _cleanup.CleanupAsync(server, createdResources);
+                }
+                else
+                {
+                    _log.LogInformation("✅ Test mode completed - resources left intact");
+                }
+            }
+        }
+        else
+        {
+            await _cloner.CloneAsync(server, _opt.SourceCategoryName, newCategoryName, _opt);
+        }
+        
         _log.LogInformation("✅ Done. Press ENTER to exit…");
     }
 

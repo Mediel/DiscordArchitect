@@ -137,7 +137,8 @@ dotnet user-secrets set "Discord:ServerId" "123456789012345678"
     "SourceCategoryName": "Template",
     "CreateRolePerCategory": true,
     "EveryoneAccessToNewCategory": false,
-    "SyncChannelsToCategory": true
+    "SyncChannelsToCategory": true,
+    "TestMode": false
   }
 }
 ```
@@ -189,12 +190,22 @@ Below is the complete list of NuGet packages this solution uses. Versions are al
 
 ## Run
 
+### Normal Mode
 ```bash
 dotnet build
 dotnet run
 ```
 
-You’ll see login logs and be prompted: **“Enter new category name:”**. Type it (e.g., `Event‑042`).
+### Test Mode
+```bash
+# Command line
+dotnet run -- --test-mode
+
+# Or via configuration
+dotnet run -- --TestMode=true
+```
+
+You'll see login logs and be prompted: **"Enter new category name:"**. Type it (e.g., `Event‑042`).
 
 The app will:
 
@@ -203,6 +214,34 @@ The app will:
 3. (Optionally) create a same‑named role and grant it access; enforce `@everyone` toggle.
 4. Clone text/news/voice/forum channels **in template order**.
 5. For forum channels, **PATCH available tags** via REST.
+
+### Test Mode Features
+
+When running in test mode (`--test-mode` or `TestMode: true` in configuration):
+
+1. **Resource Tracking**: All created resources (category, channels, role) are tracked
+2. **Verification Prompt**: After creation, you'll be asked to verify resources in Discord
+3. **Cleanup Option**: You can choose to delete all created resources automatically
+4. **Safe Testing**: Perfect for testing configurations without cluttering your server
+
+**Test Mode Flow:**
+```
+🧪 Running in TEST MODE - resources will be tracked for cleanup
+✅ Test mode: Resources created successfully!
+   📁 Category: 123456789012345678
+   📺 Channels: 3
+   🧩 Role: 987654321098765432
+
+🔍 Please verify the created resources in Discord, then press ENTER to continue...
+
+🗑️  Do you want to delete the created resources? (y/n): y
+🧹 Starting cleanup...
+✅ Deleted category: TestCategory (ID: 123456789012345678)
+✅ Deleted channel: general (ID: 111111111111111111)
+✅ Deleted channel: voice (ID: 222222222222222222)
+✅ Deleted role: TestCategory (ID: 987654321098765432)
+🎉 Cleanup completed successfully!
+```
 
 ---
 

@@ -12,7 +12,8 @@ var builder = Host.CreateDefaultBuilder(args)
     .ConfigureAppConfiguration(cfg =>
     {
         cfg.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-           .AddUserSecrets<Program>();
+           .AddUserSecrets<Program>()
+           .AddCommandLine(args);
     })
     .ConfigureServices((ctx, services) =>
     {
@@ -37,7 +38,10 @@ var builder = Host.CreateDefaultBuilder(args)
             SourceCategoryName = ctx.Configuration["Discord:SourceCategoryName"] ?? "Template",
             CreateRolePerCategory = bool.TryParse(ctx.Configuration["Discord:CreateRolePerCategory"], out var c1) && c1,
             EveryoneAccessToNewCategory = bool.TryParse(ctx.Configuration["Discord:EveryoneAccessToNewCategory"], out var c2) && c2,
-            SyncChannelsToCategory = bool.TryParse(ctx.Configuration["Discord:SyncChannelsToCategory"], out var c3) && c3
+            SyncChannelsToCategory = bool.TryParse(ctx.Configuration["Discord:SyncChannelsToCategory"], out var c3) && c3,
+            TestMode = bool.TryParse(ctx.Configuration["Discord:TestMode"], out var c4) && c4 || 
+                      bool.TryParse(ctx.Configuration["test-mode"], out var c5) && c5 ||
+                      bool.TryParse(ctx.Configuration["TestMode"], out var c6) && c6
         };
         if (ulong.TryParse(ctx.Configuration["Discord:ServerId"], out var gid)) opts.ServerId = gid;
 
@@ -50,6 +54,7 @@ var builder = Host.CreateDefaultBuilder(args)
             o.CreateRolePerCategory = opts.CreateRolePerCategory;
             o.EveryoneAccessToNewCategory = opts.EveryoneAccessToNewCategory;
             o.SyncChannelsToCategory = opts.SyncChannelsToCategory;
+            o.TestMode = opts.TestMode;
         });
 
         // DiscordFactories client
@@ -71,6 +76,7 @@ var builder = Host.CreateDefaultBuilder(args)
         services.AddSingleton<DiagnosticsService>();
         services.AddSingleton<PermissionPlanner>();
         services.AddSingleton<ForumTagService>();
+        services.AddSingleton<CleanupService>();
         services.AddSingleton<CategoryCloner>();
 
         // Hosted service
