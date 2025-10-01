@@ -77,6 +77,7 @@ var builder = Host.CreateDefaultBuilder(args)
         services.AddSingleton<PermissionPlanner>();
         services.AddSingleton<ForumTagService>();
         services.AddSingleton<CleanupService>();
+        services.AddSingleton<VerificationService>();
         services.AddSingleton<CategoryCloner>();
 
         // Hosted service

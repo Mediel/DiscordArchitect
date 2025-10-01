@@ -24,6 +24,7 @@ public sealed class DiscordHostedService : IHostedService
     private readonly Prompt _prompt;
     private readonly CategoryCloner _cloner;
     private readonly CleanupService _cleanup;
+    private readonly VerificationService _verification;
     private TaskCompletionSource<bool>? _readyTcs;
 
     public DiscordHostedService(
@@ -32,7 +33,8 @@ public sealed class DiscordHostedService : IHostedService
         IOptions<DiscordOptions> opt,
         Prompt prompt,
         CategoryCloner cloner,
-        CleanupService cleanup)
+        CleanupService cleanup,
+        VerificationService verification)
     {
         _log = log;
         _client = client;
@@ -40,6 +42,7 @@ public sealed class DiscordHostedService : IHostedService
         _prompt = prompt;
         _cloner = cloner;
         _cleanup = cleanup;
+        _verification = verification;
     }
 
     /// <summary>
@@ -84,6 +87,11 @@ public sealed class DiscordHostedService : IHostedService
                 if (createdResources.RoleId.HasValue)
                     _log.LogInformation("   🧩 Role: {RoleId}", createdResources.RoleId);
                 
+                // Run verification
+                _log.LogInformation("🔍 Running post-creation verification...");
+                var verificationResult = await _verification.VerifyAsync(server, createdResources, _opt);
+                LogVerificationResults(verificationResult);
+                
                 Console.WriteLine();
                 Console.WriteLine("🔍 Please verify the created resources in Discord, then press ENTER to continue...");
                 Console.ReadLine();
@@ -105,10 +113,52 @@ public sealed class DiscordHostedService : IHostedService
         }
         else
         {
-            await _cloner.CloneAsync(server, _opt.SourceCategoryName, newCategoryName, _opt);
+            var createdResources = await _cloner.CloneWithTrackingAsync(server, _opt.SourceCategoryName, newCategoryName, _opt);
+            
+            if (createdResources != null)
+            {
+                // Run verification for normal mode too
+                _log.LogInformation("🔍 Running post-creation verification...");
+                var verificationResult = await _verification.VerifyAsync(server, createdResources, _opt);
+                LogVerificationResults(verificationResult);
+            }
         }
         
         _log.LogInformation("✅ Done. Press ENTER to exit…");
+    }
+
+    private void LogVerificationResults(VerificationResult result)
+    {
+        _log.LogInformation("📊 Verification Results:");
+        
+        foreach (var finding in result.Findings)
+        {
+            var icon = finding.Type switch
+            {
+                VerificationType.Success => "✅",
+                VerificationType.Warning => "⚠️",
+                VerificationType.Error => "❌",
+                VerificationType.Info => "ℹ️",
+                _ => "❓"
+            };
+            
+            _log.LogInformation("  {Icon} [{Category}] {Message}", icon, finding.Category, finding.Message);
+            if (!string.IsNullOrEmpty(finding.Description))
+            {
+                _log.LogInformation("     {Description}", finding.Description);
+            }
+        }
+        
+        if (result.Recommendations.Any())
+        {
+            _log.LogInformation("💡 Recommendations:");
+            foreach (var recommendation in result.Recommendations)
+            {
+                _log.LogInformation("  • {Recommendation}", recommendation);
+            }
+        }
+        
+        _log.LogInformation("📋 {Summary}", result.Summary);
     }
 
     /// <summary>

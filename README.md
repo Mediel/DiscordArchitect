@@ -220,9 +220,10 @@ The app will:
 When running in test mode (`--test-mode` or `TestMode: true` in configuration):
 
 1. **Resource Tracking**: All created resources (category, channels, role) are tracked
-2. **Verification Prompt**: After creation, you'll be asked to verify resources in Discord
-3. **Cleanup Option**: You can choose to delete all created resources automatically
-4. **Safe Testing**: Perfect for testing configurations without cluttering your server
+2. **Post-Run Verification**: Automatic verification that all resources exist and have correct permissions
+3. **Verification Prompt**: After creation, you'll be asked to verify resources in Discord
+4. **Cleanup Option**: You can choose to delete all created resources automatically
+5. **Safe Testing**: Perfect for testing configurations without cluttering your server
 
 **Test Mode Flow:**
 ```
@@ -231,6 +232,16 @@ When running in test mode (`--test-mode` or `TestMode: true` in configuration):
    📁 Category: 123456789012345678
    📺 Channels: 3
    🧩 Role: 987654321098765432
+
+🔍 Running post-creation verification...
+📊 Verification Results:
+  ✅ [Category] Category 'TestCategory' exists and is accessible
+  ✅ [Channel] Channel 'general' exists and is accessible
+  ✅ [Channel] Channel 'voice' exists and is accessible
+  ✅ [Role] Role 'TestCategory' exists
+  ✅ [Permissions] All channels are synced to category
+  ℹ️ [Channels] Verified 2/2 channels
+📋 Verification Summary: 5 ✅ Success, 0 ⚠️ Warnings, 0 ❌ Errors, 1 ℹ️ Info
 
 🔍 Please verify the created resources in Discord, then press ENTER to continue...
 
@@ -241,6 +252,52 @@ When running in test mode (`--test-mode` or `TestMode: true` in configuration):
 ✅ Deleted channel: voice (ID: 222222222222222222)
 ✅ Deleted role: TestCategory (ID: 987654321098765432)
 🎉 Cleanup completed successfully!
+```
+
+---
+
+## Post-Run Verification
+
+The application now includes comprehensive post-run verification that automatically checks:
+
+### ✅ **Resource Existence**
+- Verifies that all created categories, channels, and roles exist
+- Checks for any missing or deleted resources
+
+### 🔍 **Permission Validation**
+- Validates that channels are properly synced to their category
+- Checks @everyone access permissions
+- Verifies role permissions on categories
+
+### 📊 **Visibility Checks**
+- Ensures channels are visible to appropriate users
+- Identifies hidden channels that may need attention
+- Validates permission inheritance
+
+### 💡 **Smart Recommendations**
+- Provides actionable recommendations for permission issues
+- Suggests fixes for common configuration problems
+- Helps optimize Discord server setup
+
+### 📋 **Detailed Reporting**
+- Color-coded verification results (✅ Success, ⚠️ Warning, ❌ Error, ℹ️ Info)
+- Summary statistics of verification findings
+- Clear categorization of issues by type
+
+**Example Verification Output:**
+```
+📊 Verification Results:
+  ✅ [Category] Category 'MyCategory' exists and is accessible
+  ✅ [Channel] Channel 'general' exists and is accessible
+  ⚠️ [Channel] Channel 'private' is hidden from @everyone
+  ✅ [Role] Role 'MyCategory' exists
+  ✅ [Permissions] All channels are synced to category
+  ℹ️ [Channels] Verified 2/2 channels
+
+💡 Recommendations:
+  • Consider reviewing permissions for 1 hidden channels.
+
+📋 Verification Summary: 4 ✅ Success, 1 ⚠️ Warnings, 0 ❌ Errors, 1 ℹ️ Info
 ```
 
 ---
