@@ -16,6 +16,20 @@ var builder = Host.CreateDefaultBuilder(args)
     })
     .ConfigureServices((ctx, services) =>
     {
+        // Validate configuration before proceeding
+        var validator = new ConfigurationValidator(ctx.Configuration);
+        var validationResult = validator.Validate();
+        
+        if (!validationResult.IsValid)
+        {
+            Console.WriteLine("❌ Configuration validation failed:");
+            Console.WriteLine(validationResult.ErrorMessage);
+            Console.WriteLine();
+            Console.WriteLine("Please fix the configuration issues and try again.");
+            Environment.Exit(1);
+        }
+        
+        Console.WriteLine("✅ Configuration validation passed.");
         // Options binding (bez Binderu, ale použijeme standardní pattern)
         var opts = new DiscordOptions
         {
