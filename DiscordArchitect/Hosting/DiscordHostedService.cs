@@ -154,7 +154,22 @@ public sealed class DiscordHostedService : IHostedService
             }
         }
         
-        _log.LogInformation("✅ Done. Press ENTER to exit…");
+        // Check if running in automated mode for final exit
+        var isAutomatedExit = _opt.AutoCleanup || 
+                             Console.IsInputRedirected || 
+                             Environment.GetEnvironmentVariable("DISCORD_ARCHITECT_AUTO") == "true" ||
+                             _opt.TestMode && Environment.GetEnvironmentVariable("CI") == "true";
+
+        if (isAutomatedExit)
+        {
+            _log.LogInformation("✅ Done. Exiting automatically...");
+            Environment.Exit(0);
+        }
+        else
+        {
+            _log.LogInformation("✅ Done. Press ENTER to exit…");
+            Console.ReadLine();
+        }
     }
 
     private void LogVerificationResults(VerificationResult result)
