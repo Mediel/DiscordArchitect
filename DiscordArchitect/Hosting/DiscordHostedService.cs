@@ -77,6 +77,7 @@ public sealed class DiscordHostedService : IHostedService
         if (_opt.TestMode)
         {
             _log.LogInformation("🧪 Running in TEST MODE - resources will be tracked for cleanup");
+            _log.LogInformation("🔍 Debug: TestMode={TestMode}, AutoCleanup={AutoCleanup}", _opt.TestMode, _opt.AutoCleanup);
             var createdResources = await _cloner.CloneWithTrackingAsync(server, _opt.SourceCategoryName, newCategoryName, _opt);
             
             if (createdResources != null)
@@ -94,11 +95,40 @@ public sealed class DiscordHostedService : IHostedService
                 
                 Console.WriteLine();
                 Console.WriteLine("🔍 Please verify the created resources in Discord, then press ENTER to continue...");
-                Console.ReadLine();
+                
+                // Check if running in automated mode
+                var isAutomated = _opt.AutoCleanup || 
+                                 Console.IsInputRedirected || 
+                                 Environment.GetEnvironmentVariable("DISCORD_ARCHITECT_AUTO") == "true" ||
+                                 _opt.TestMode && Environment.GetEnvironmentVariable("CI") == "true";
+                
+                _log.LogInformation("🔍 Debug: AutoCleanup={AutoCleanup}, IsInputRedirected={IsInputRedirected}, DISCORD_ARCHITECT_AUTO={DiscordAuto}, CI={CI}, isAutomated={IsAutomated}", 
+                    _opt.AutoCleanup, Console.IsInputRedirected, Environment.GetEnvironmentVariable("DISCORD_ARCHITECT_AUTO"), Environment.GetEnvironmentVariable("CI"), isAutomated);
+                
+                if (isAutomated)
+                {
+                    _log.LogInformation("🤖 Automated mode detected - proceeding with automatic cleanup");
+                    await Task.Delay(2000); // Give a moment to see the logs
+                }
+                else
+                {
+                    _log.LogInformation("👤 Manual mode - waiting for user input");
+                    Console.ReadLine();
+                }
                 
                 Console.WriteLine();
                 Console.Write("🗑️  Do you want to delete the created resources? (y/n): ");
-                var response = Console.ReadLine();
+                
+                string response;
+                if (isAutomated)
+                {
+                    response = "y"; // Automatically delete in automated mode
+                    _log.LogInformation("🤖 Automated mode - automatically deleting resources");
+                }
+                else
+                {
+                    response = Console.ReadLine() ?? "n";
+                }
                 
                 if (response?.ToLowerInvariant().StartsWith("y") == true)
                 {

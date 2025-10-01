@@ -38,4 +38,19 @@ public sealed class DiscordOptions
     /// Gets or sets a value indicating whether the application should run in test mode, allowing for cleanup of created resources.
     /// </summary>
     public bool TestMode { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether verbose logging should be enabled.
+    /// </summary>
+    public bool Verbose { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether logs should be output in JSON format.
+    /// </summary>
+    public bool JsonOutput { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to automatically clean up resources in test mode.
+    /// </summary>
+    public bool AutoCleanup { get; set; } = false;
 }
