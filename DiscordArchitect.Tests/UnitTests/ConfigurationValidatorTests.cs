@@ -266,7 +266,7 @@ public class ConfigurationValidatorTests
         var errorMessage = result.ErrorMessage;
 
         // Assert
-        errorMessage.Should().Be("Error 1\r\nError 2\r\nError 3");
+        errorMessage.Should().Be($"Error 1{Environment.NewLine}Error 2{Environment.NewLine}Error 3");
     }
 }
 
