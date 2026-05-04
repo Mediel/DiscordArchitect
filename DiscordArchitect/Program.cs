@@ -56,6 +56,10 @@ var builder = Host.CreateDefaultBuilder(args)
         if (!jsonOutput)
         {
             Console.WriteLine("✅ Configuration validation passed.");
+            var sourceTemplate = ctx.Configuration["Discord:SourceCategoryName"] ?? "Template";
+            var sid = ctx.Configuration["Discord:ServerId"] ?? "";
+            Console.WriteLine($"   Server ID: {sid}   ·   Template category: {sourceTemplate}");
+            Console.WriteLine();
         }
         else
         {
@@ -70,45 +74,38 @@ var builder = Host.CreateDefaultBuilder(args)
     })
     .UseSerilog((context, services, configuration) =>
     {
-        // Get options from DI
         var options = services.GetRequiredService<DiscordOptions>();
-        
+        var minimumLevel = options.Verbose ? LogEventLevel.Debug : LogEventLevel.Information;
+
         configuration
             .Enrich.FromLogContext()
             .Enrich.WithEnvironmentName()
             .Enrich.WithMachineName()
             .Enrich.WithThreadId()
             .Enrich.WithProperty("Application", "DiscordArchitect")
-            .Enrich.WithProperty("Version", "1.0.0");
+            .Enrich.WithProperty("Version", "1.0.0")
+            .WithDiscordArchitectLevels(options);
 
-        // Set minimum level based on verbose mode
-        var minimumLevel = options.Verbose ? LogEventLevel.Debug : LogEventLevel.Information;
-        configuration.MinimumLevel.Is(minimumLevel);
-
-        // Configure console output
         if (options.JsonOutput)
         {
-            // JSON output for structured logging
             configuration.WriteTo.Console(
                 new JsonFormatter(renderMessage: true),
                 restrictedToMinimumLevel: minimumLevel);
         }
         else
         {
-            // Human-readable output with emojis and colors
             configuration.WriteTo.Console(
-                outputTemplate: "{Timestamp:HH:mm:ss} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+                outputTemplate: SerilogConfiguration.HumanConsoleTemplate,
                 restrictedToMinimumLevel: minimumLevel);
         }
 
-        // Add file logging
         configuration.WriteTo.File(
             path: "logs/discord-architect-.log",
             rollingInterval: RollingInterval.Day,
             retainedFileCountLimit: 7,
-            outputTemplate: options.JsonOutput 
+            outputTemplate: options.JsonOutput
                 ? "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}"
-                : "{Timestamp:HH:mm:ss} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+                : SerilogConfiguration.HumanFileTemplate,
             restrictedToMinimumLevel: LogEventLevel.Information);
     });
 

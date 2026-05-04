@@ -72,12 +72,15 @@ public sealed class DiscordHostedService : IHostedService
             return;
         }
 
-        var newCategoryName = await _prompt.GetNewCategoryNameAsync();
+        _log.LogInformation("➜ Guild: {GuildName} ({GuildId}) · template category: {Template}",
+            server.Name, server.Id, _opt.SourceCategoryName);
+
+        var newCategoryName = await _prompt.GetNewCategoryNameAsync(server, _opt.SourceCategoryName, ct);
         
         if (_opt.TestMode)
         {
             _log.LogInformation("🧪 Running in TEST MODE - resources will be tracked for cleanup");
-            _log.LogInformation("🔍 Debug: TestMode={TestMode}, AutoCleanup={AutoCleanup}", _opt.TestMode, _opt.AutoCleanup);
+            _log.LogDebug("TestMode={TestMode}, AutoCleanup={AutoCleanup}", _opt.TestMode, _opt.AutoCleanup);
             var createdResources = await _cloner.CloneWithTrackingAsync(server, _opt.SourceCategoryName, newCategoryName, _opt);
             
             if (createdResources != null)
@@ -102,7 +105,7 @@ public sealed class DiscordHostedService : IHostedService
                                  Environment.GetEnvironmentVariable("DISCORD_ARCHITECT_AUTO") == "true" ||
                                  _opt.TestMode && Environment.GetEnvironmentVariable("CI") == "true";
                 
-                _log.LogInformation("🔍 Debug: AutoCleanup={AutoCleanup}, IsInputRedirected={IsInputRedirected}, DISCORD_ARCHITECT_AUTO={DiscordAuto}, CI={CI}, isAutomated={IsAutomated}", 
+                _log.LogDebug("AutoCleanup={AutoCleanup}, IsInputRedirected={IsInputRedirected}, DISCORD_ARCHITECT_AUTO={DiscordAuto}, CI={CI}, isAutomated={IsAutomated}",
                     _opt.AutoCleanup, Console.IsInputRedirected, Environment.GetEnvironmentVariable("DISCORD_ARCHITECT_AUTO"), Environment.GetEnvironmentVariable("CI"), isAutomated);
                 
                 if (isAutomated)

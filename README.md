@@ -15,7 +15,7 @@
   * **Announcement/News channels** (type 5).
   * **Voice channels** — name, bitrate, user limit.
   * **Forum channels** — name, topic, default sort order, and **available tags** (patched via Discord REST API v10).
-* 🔒 **No secrets in Git** — token & guild ID live in **UserSecrets** only.
+* 🔒 **No secrets in Git** — `Discord:Token` and `Discord:ServerId` belong in **`dotnet user-secrets`** (or private env overrides), not in committed `appsettings.json`.
 
 ---
 
@@ -76,9 +76,17 @@ Only the standard **Guilds** intent is needed. **Privileged intents** can stay *
 
 ### 1) Create a Discord bot + token
 
-1. Developer Portal → **New Application** → name it.
-2. **Bot** → **Add Bot**.
-3. **Reset/Copy Token** and store it safely (reset immediately if leaked).
+Official entry points (bookmark these):
+
+* [Discord Developer Portal — Applications](https://discord.com/developers/applications) — create/select your app, configure the **Bot**, copy the token.
+* [Discord Developer Documentation — Introduction](https://discord.com/developers/docs/intro) — overview of apps, bots, and API concepts.
+* [OAuth2 and bot accounts](https://discord.com/developers/docs/topics/oauth2#bots) — how bot tokens relate to the OAuth2 model.
+
+Steps in the portal:
+
+1. **New Application** → name it (this is only the app name in the dashboard).
+2. Left sidebar → **Bot** → **Add Bot** (if you have not already).
+3. Under **TOKEN**, use **Reset Token** or **Copy** and store it safely. If it ever leaks, **reset it here** immediately.
 
 ### 2) Invite the bot to your guild
 
@@ -119,17 +127,38 @@ https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot&permissi
 > * The **Bot Permissions** checkboxes in the Developer Portal only help **build the URL**; they do **not** change live server permissions. Real permissions = the bot’s role(s) on the server + the permissions integer used at invite time.
 > * To create/edit roles, the bot needs a **non‑managed role** with **Manage Roles** placed **above** the roles it will manage.
 
-### 3) Secrets (UserSecrets) & config
+### 3) Where to get `Discord:Token` and `Discord:ServerId`
 
-Run in the project directory:
+These two values are what the app reads as **`Discord:Token`** (bot token) and **`Discord:ServerId`** (numeric guild/server ID).
+
+**Bot token → `Discord:Token`**
+
+* Same as in step **1)** above: [Developer Portal](https://discord.com/developers/applications) → your application → **Bot** → copy or reset the **token**. That string is your `Discord:Token`.
+
+**Server (guild) ID → `Discord:ServerId`**
+
+* Official help: [Discord Support — Where can I find my User/Server/Message ID?](https://support.discord.com/hc/en-us/articles/206346498-Where-can-I-find-my-User-Server-Message-ID-)
+* In the Discord app: **User Settings** (gear) → **App Settings** → **Advanced** → turn **Developer Mode** **On**.
+* Right‑click your **server icon** in the left sidebar (not a channel) → **Copy Server ID**. Store that 17–19 digit string as `Discord:ServerId` via **user-secrets** (step **4)**).
+
+**Invite link only — Client ID (not the same as token)**
+
+* [Developer Portal](https://discord.com/developers/applications) → your app → **OAuth2** → **General** → **Client ID**. Use it in the invite URLs in step **2)**. More detail: [OAuth2 documentation](https://discord.com/developers/docs/topics/oauth2).
+
+---
+
+### 4) Secrets ([User Secrets](https://learn.microsoft.com/en-us/aspnet/core/security/app-secrets)) & config
+
+For a **public** clone of this repo, keep **`Discord:Token`** and **`Discord:ServerId`** out of Git. Set them locally:
 
 ```bash
+cd DiscordArchitect
 dotnet user-secrets init
 dotnet user-secrets set "Discord:Token" "YOUR_BOT_TOKEN"
 dotnet user-secrets set "Discord:ServerId" "123456789012345678"
 ```
 
-`appsettings.json` (safe to commit):
+`appsettings.json` in the repo stays **free of secrets** — only non‑sensitive options, safe to commit:
 
 ```json
 {
@@ -143,48 +172,15 @@ dotnet user-secrets set "Discord:ServerId" "123456789012345678"
 }
 ```
 
-### 4) Packages
+(Later configuration sources override earlier ones; see [`DiscordArchitect/Program.cs`](DiscordArchitect/Program.cs).)
 
-Below is the complete list of NuGet packages this solution uses. Versions are aligned for consistency.
+### 5) NuGet packages
 
-**Required**
+Exact versions live in [`DiscordArchitect/DiscordArchitect.csproj`](DiscordArchitect/DiscordArchitect.csproj). At a glance:
 
-* `Discord.Net` **3.18.0** — Discord API client (Socket + REST)
-* `Microsoft.Extensions.Configuration` **9.0.9** — base configuration primitives
-* `Microsoft.Extensions.Configuration.Json` **9.0.9** — enables `AddJsonFile("appsettings.json", ...)`
-* `Microsoft.Extensions.Configuration.UserSecrets` **9.0.9** — enables `AddUserSecrets<Program>()`
-* `Microsoft.Extensions.Hosting` **9.0.9** — generic host & `IHostedService`
-* `Microsoft.Extensions.Logging.Console` **9.0.9** — console logger provider
-* `Microsoft.Extensions.Options` **9.0.9** — `IOptions<T>` pattern
-
-**Optional**
-
-* `Microsoft.Extensions.Configuration.EnvironmentVariables` **9.0.9** — load env vars into config
-* `Microsoft.Extensions.Configuration.CommandLine` **9.0.9** — parse CLI args into config
-* `Microsoft.Extensions.Configuration.Binder` **9.0.9** — if you later bind `DiscordOptions` via `Bind()`
-
-**`.csproj` snippet:**
-
-```xml
-<ItemGroup>
-  <!-- Discord -->
-  <PackageReference Include="Discord.Net" Version="3.18.0" />
-
-  <!-- Configuration -->
-  <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.9" />
-  <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.9" />
-  <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.9" />
-  <!-- Optional -->
-  <!-- <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="9.0.9" /> -->
-  <!-- <PackageReference Include="Microsoft.Extensions.Configuration.CommandLine" Version="9.0.9" /> -->
-  <!-- <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.9" /> -->
-
-  <!-- Hosting & Logging & Options -->
-  <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
-  <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.9" />
-  <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.9" />
-</ItemGroup>
-```
+* **Discord.Net** — Socket + REST client for Discord.
+* **Microsoft.Extensions.*** — hosting, configuration (including user-secrets), logging, options.
+* **Serilog** + sinks / enrichers — structured and file/console logging.
 
 ---
 
@@ -314,8 +310,8 @@ The application now includes comprehensive post-run verification that automatica
 ## Security
 
 * Never commit your token or ServerId.
-* If your token leaks, reset it in the Developer Portal.
-* Store secrets in a password manager; this repo reads them from **UserSecrets** only.
+* If your token leaks, reset it in the [Developer Portal](https://discord.com/developers/applications) → **Bot** → **Reset Token**.
+* Store secrets in a password manager; this workflow expects **`Discord:Token`** and **`Discord:ServerId`** in **UserSecrets**, not in tracked files.
 
 `.gitignore` essentials:
 
@@ -331,11 +327,11 @@ appsettings.Development.json
 
 ## Troubleshooting
 
-**“❌ Token not found”**
-Set the secret: `dotnet user-secrets set "Discord:Token" "YOUR_BOT_TOKEN"`.
+**“❌ Token not found” / validation says `Discord:Token` is required**
+Run `dotnet user-secrets set "Discord:Token" "YOUR_BOT_TOKEN"`. For where the value comes from, see step **3)** above.
 
-**“❌ ServerId not found”**
-Set the guild ID: `dotnet user-secrets set "Discord:ServerId" "123456789012345678"`.
+**“❌ ServerId not found” / `Discord:ServerId` is required**
+Run `dotnet user-secrets set "Discord:ServerId" "123456789012345678"`. See step **3)** for **Copy Server ID**.
 
 **“❌ Server not found” / Bot offline**
 Ensure the bot is invited and not disabled; verify the `ServerId`.
@@ -379,10 +375,13 @@ Discord throttles bursts; the client handles it. Large templates may take a bit.
     "SourceCategoryName": "Template",
     "CreateRolePerCategory": true,
     "EveryoneAccessToNewCategory": false,
-    "SyncChannelsToCategory": true
+    "SyncChannelsToCategory": true,
+    "TestMode": false
   }
 }
 ```
+
+Set **`Discord:Token`** and **`Discord:ServerId`** with `dotnet user-secrets` (see **Install & Configure** step **4)**); do not add them here in a public fork.
 
 ---
 
@@ -401,4 +400,4 @@ dotnet user-secrets set "Discord:Token" "YOUR_BOT_TOKEN"
 dotnet user-secrets set "Discord:ServerId" "123456789012345678"
 ```
 
-Happy clonin
+Happy cloning.

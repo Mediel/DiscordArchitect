@@ -1,10 +1,7 @@
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Json;
-using Serilog.Configuration;
 using DiscordArchitect.Options;
 
 namespace DiscordArchitect.Logging;
@@ -14,6 +11,25 @@ namespace DiscordArchitect.Logging;
 /// </summary>
 public static class SerilogConfiguration
 {
+    internal const string HumanConsoleTemplate =
+        "{Timestamp:HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}";
+
+    internal const string HumanFileTemplate =
+        "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}";
+
+    /// <summary>
+    /// Applies minimum levels and suppresses noisy framework namespaces on the console.
+    /// </summary>
+    public static LoggerConfiguration WithDiscordArchitectLevels(this LoggerConfiguration cfg, DiscordOptions options)
+    {
+        var minimumLevel = options.Verbose ? LogEventLevel.Debug : LogEventLevel.Information;
+        return cfg
+            .MinimumLevel.Is(minimumLevel)
+            .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+            .MinimumLevel.Override("System", LogEventLevel.Warning)
+            .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information);
+    }
+
     /// <summary>
     /// Configures Serilog based on the provided options.
     /// </summary>
@@ -22,17 +38,16 @@ public static class SerilogConfiguration
     /// <returns>Configured Serilog logger.</returns>
     public static ILogger CreateLogger(DiscordOptions options, IConfiguration configuration)
     {
+        var minimumLevel = options.Verbose ? LogEventLevel.Debug : LogEventLevel.Information;
+
         var loggerConfig = new LoggerConfiguration()
             .Enrich.FromLogContext()
             .Enrich.WithEnvironmentName()
             .Enrich.WithMachineName()
             .Enrich.WithThreadId()
             .Enrich.WithProperty("Application", "DiscordArchitect")
-            .Enrich.WithProperty("Version", "1.0.0");
-
-        // Set minimum level based on verbose mode
-        var minimumLevel = options.Verbose ? LogEventLevel.Debug : LogEventLevel.Information;
-        loggerConfig.MinimumLevel.Is(minimumLevel);
+            .Enrich.WithProperty("Version", "1.0.0")
+            .WithDiscordArchitectLevels(options);
 
         // Configure console output
         if (options.JsonOutput)
@@ -44,9 +59,8 @@ public static class SerilogConfiguration
         }
         else
         {
-            // Human-readable output with emojis and colors
             loggerConfig.WriteTo.Console(
-                outputTemplate: "{Timestamp:HH:mm:ss} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+                outputTemplate: HumanConsoleTemplate,
                 restrictedToMinimumLevel: minimumLevel);
         }
 
@@ -55,46 +69,11 @@ public static class SerilogConfiguration
             path: "logs/discord-architect-.log",
             rollingInterval: RollingInterval.Day,
             retainedFileCountLimit: 7,
-            outputTemplate: options.JsonOutput 
+            outputTemplate: options.JsonOutput
                 ? "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}"
-                : "{Timestamp:HH:mm:ss} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+                : HumanFileTemplate,
             restrictedToMinimumLevel: LogEventLevel.Information);
 
         return loggerConfig.CreateLogger();
-    }
-
-    /// <summary>
-    /// Configures Serilog for the host builder.
-    /// </summary>
-    /// <param name="hostBuilder">The host builder to configure.</param>
-    /// <returns>Configured host builder.</returns>
-    public static IHostBuilder UseSerilog(this IHostBuilder hostBuilder)
-    {
-        return hostBuilder.UseSerilog((context, services, configuration) =>
-        {
-            configuration
-                .Enrich.FromLogContext()
-                .Enrich.WithEnvironmentName()
-                .Enrich.WithMachineName()
-                .Enrich.WithThreadId()
-                .Enrich.WithProperty("Application", "DiscordArchitect")
-                .Enrich.WithProperty("Version", "1.0.0");
-
-            // Set minimum level
-            configuration.MinimumLevel.Is(LogEventLevel.Information);
-
-            // Configure console output
-            configuration.WriteTo.Console(
-                outputTemplate: "{Timestamp:HH:mm:ss} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
-                restrictedToMinimumLevel: LogEventLevel.Information);
-
-            // Add file logging
-            configuration.WriteTo.File(
-                path: "logs/discord-architect-.log",
-                rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 7,
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
-                restrictedToMinimumLevel: LogEventLevel.Information);
-        });
     }
 }
