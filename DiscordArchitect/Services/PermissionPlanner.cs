@@ -76,4 +76,23 @@ public sealed class PermissionPlanner
         );
         return category.AddPermissionOverwriteAsync(role, allowRole);
     }
+
+    /// <summary>
+    /// Grants the role access to a specific guild channel (not the whole category).
+    /// </summary>
+    /// <remarks>
+    /// Voice channels get connect/speak; other channel types get view + send messages (aligned with category text access).
+    /// </remarks>
+    public Task GrantChannelRoleAsync(IGuildChannel channel, IRole role)
+    {
+        var allowRole = channel is IVoiceChannel
+            ? new OverwritePermissions(
+                viewChannel: PermValue.Allow,
+                connect: PermValue.Allow,
+                speak: PermValue.Allow)
+            : new OverwritePermissions(
+                viewChannel: PermValue.Allow,
+                sendMessages: PermValue.Allow);
+        return channel.AddPermissionOverwriteAsync(role, allowRole);
+    }
 }

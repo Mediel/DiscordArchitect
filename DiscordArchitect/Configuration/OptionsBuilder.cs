@@ -57,6 +57,11 @@ public static class OptionsBuilder
         var jsonOutput = ConfigurationBuilder.ParseBoolean(config, "Discord:JsonOutput", "json", "--json");
         var serverId = ConfigurationBuilder.ParseUlong(config, "Discord:ServerId");
 
+        var specialChannelRoles = config.GetSection("Discord:SpecialChannelRoles")
+            .Get<List<SpecialChannelRoleOptions>>()?
+            .Where(static x => x != null)
+            .ToList() ?? [];
+
         return new DiscordOptions
         {
             Token = token,
@@ -68,7 +73,8 @@ public static class OptionsBuilder
             TestMode = testMode,
             Verbose = verboseOption,
             JsonOutput = jsonOutput,
-            AutoCleanup = autoCleanup
+            AutoCleanup = autoCleanup,
+            SpecialChannelRoles = specialChannelRoles
         };
     }
 

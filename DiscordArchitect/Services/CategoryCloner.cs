@@ -80,6 +80,7 @@ namespace DiscordArchitect.Services
 
             // Track created resources for cleanup
             var createdChannels = new List<ulong>();
+            var specialRoleIds = new List<ulong>();
             ulong? createdCategoryId = null;
             ulong? createdRoleId = null;
 
@@ -182,6 +183,7 @@ namespace DiscordArchitect.Services
                             createdChannels.Add(created.Id);
                             _log.LogInformation("📰 Cloned announcement channel: {Name}", created.Name);
                             if (opt.SyncChannelsToCategory) await created.SyncPermissionsAsync();
+                            await TryApplySpecialChannelRoleAsync(server, newCategoryName, newsCh, created, opt, me, specialRoleIds);
                             break;
                         }
 
@@ -197,6 +199,7 @@ namespace DiscordArchitect.Services
                             createdChannels.Add(created.Id);
                             _log.LogInformation("💬 Cloned text channel: {Name}", created.Name);
                             if (opt.SyncChannelsToCategory) await created.SyncPermissionsAsync();
+                            await TryApplySpecialChannelRoleAsync(server, newCategoryName, textCh, created, opt, me, specialRoleIds);
                             break;
                         }
 
@@ -211,6 +214,7 @@ namespace DiscordArchitect.Services
                             createdChannels.Add(created.Id);
                             _log.LogInformation("🔊 Cloned voice channel: {Name}", created.Name);
                             if (opt.SyncChannelsToCategory) await created.SyncPermissionsAsync();
+                            await TryApplySpecialChannelRoleAsync(server, newCategoryName, voiceCh, created, opt, me, specialRoleIds);
                             break;
                         }
 
@@ -226,6 +230,7 @@ namespace DiscordArchitect.Services
                             createdChannels.Add(createdForum.Id);
                             _log.LogInformation("🗂️  Created forum channel: {Name} (id: {Id})", createdForum.Name, createdForum.Id);
                             if (opt.SyncChannelsToCategory) await createdForum.SyncPermissionsAsync();
+                            await TryApplySpecialChannelRoleAsync(server, newCategoryName, forumCh, createdForum, opt, me, specialRoleIds);
 
                             if (forumCh.Tags.Any())
                             {
@@ -257,8 +262,78 @@ namespace DiscordArchitect.Services
             }
 
             _log.LogInformation("✅ Category '{New}' cloned from '{Src}' in source order.", newCategoryName, sourceCategoryName);
-            
-            return new CreatedResources(createdCategoryId, createdChannels, createdRoleId);
+
+            return new CreatedResources(createdCategoryId, createdChannels, createdRoleId)
+            {
+                AdditionalRoleIds = specialRoleIds
+            };
+        }
+
+        private static SpecialChannelRoleOptions? FindSpecialChannelRule(string sourceChannelName, DiscordOptions opt)
+        {
+            foreach (var rule in opt.SpecialChannelRoles)
+            {
+                if (string.Equals(sourceChannelName, rule.ChannelName, StringComparison.Ordinal))
+                    return rule;
+            }
+            return null;
+        }
+
+        private async Task TryApplySpecialChannelRoleAsync(
+            SocketGuild server,
+            string newCategoryName,
+            SocketGuildChannel sourceChannel,
+            IGuildChannel createdChannel,
+            DiscordOptions opt,
+            IUser me,
+            List<ulong> specialRoleIds)
+        {
+            if (opt.SpecialChannelRoles.Count == 0) return;
+
+            var rule = FindSpecialChannelRule(sourceChannel.Name, opt);
+            if (rule == null) return;
+
+            if (me is not IGuildUser guildUser || !guildUser.GuildPermissions.ManageRoles)
+            {
+                _log.LogWarning("⚠️ Skipping special role for channel '{Channel}': bot lacks Manage Roles (268435456).", sourceChannel.Name);
+                return;
+            }
+
+            try
+            {
+                var basePerms = new GuildPermissions(
+                    viewChannel: true,
+                    createInstantInvite: true,
+                    sendMessages: true,
+                    sendMessagesInThreads: true,
+                    attachFiles: true,
+                    addReactions: true,
+                    readMessageHistory: true
+                );
+
+                var roleName = $"{newCategoryName} {rule.RoleSuffix}".Trim();
+                var createdRole = await server.CreateRoleAsync(
+                    name: roleName,
+                    permissions: basePerms,
+                    color: null,
+                    isHoisted: false,
+                    isMentionable: true
+                );
+
+                var specialRole = server.GetRole(createdRole.Id);
+                specialRoleIds.Add(createdRole.Id);
+                _log.LogInformation("🧩 Created special role '{Role}' (id: {Id}) for channel '{Channel}'",
+                    specialRole!.Name, specialRole.Id, sourceChannel.Name);
+
+                await _perms.GrantChannelRoleAsync(createdChannel, specialRole);
+                _log.LogInformation("✅ Granted '{Role}' access only to channel '#{Channel}'.", specialRole.Name, createdChannel.Name);
+            }
+            catch (Discord.Net.HttpException ex)
+            {
+                _log.LogError("❌ CreateRoleAsync (special channel) failed: HTTP {Code}, DiscordCode {DCode} — {Reason}",
+                    ex.HttpCode, ex.DiscordCode, ex.Reason);
+                _log.LogError("   → Fix: give the bot a non-managed role with Manage Roles placed ABOVE other roles.");
+            }
         }
     }
 }

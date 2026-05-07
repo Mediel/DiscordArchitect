@@ -35,6 +35,7 @@ public static class ServiceConfiguration
             o.Verbose = options.Verbose;
             o.JsonOutput = options.JsonOutput;
             o.AutoCleanup = options.AutoCleanup;
+            o.SpecialChannelRoles = options.SpecialChannelRoles;
         });
 
         // Discord client

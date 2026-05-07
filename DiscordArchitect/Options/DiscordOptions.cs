@@ -53,4 +53,10 @@ public sealed class DiscordOptions
     /// Gets or sets a value indicating whether to automatically clean up resources in test mode.
     /// </summary>
     public bool AutoCleanup { get; set; } = false;
+
+    /// <summary>
+    /// Optional rules: for each listed channel name, create an extra role
+    /// <c>{newCategoryName} {RoleSuffix}</c> and grant it only on that cloned channel.
+    /// </summary>
+    public List<SpecialChannelRoleOptions> SpecialChannelRoles { get; set; } = [];
 }

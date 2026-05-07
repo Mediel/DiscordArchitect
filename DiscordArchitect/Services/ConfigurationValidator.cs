@@ -1,3 +1,4 @@
+using DiscordArchitect.Options;
 using Microsoft.Extensions.Configuration;
 
 namespace DiscordArchitect.Services;
@@ -72,6 +73,27 @@ public sealed class ConfigurationValidator
         if (!string.IsNullOrEmpty(syncChannelsToCategory) && !bool.TryParse(syncChannelsToCategory, out _))
         {
             errors.Add("Discord:SyncChannelsToCategory must be 'true' or 'false'.");
+        }
+
+        var specialSection = _configuration.GetSection("Discord:SpecialChannelRoles");
+        if (specialSection.Exists())
+        {
+            var rules = specialSection.Get<List<SpecialChannelRoleOptions>>() ?? [];
+            for (var i = 0; i < rules.Count; i++)
+            {
+                var r = rules[i];
+                if (r == null)
+                {
+                    errors.Add($"Discord:SpecialChannelRoles[{i}] is invalid (null entry).");
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(r.ChannelName))
+                    errors.Add($"Discord:SpecialChannelRoles[{i}]:ChannelName is required when SpecialChannelRoles is configured.");
+
+                if (string.IsNullOrWhiteSpace(r.RoleSuffix))
+                    errors.Add($"Discord:SpecialChannelRoles[{i}]:RoleSuffix is required when SpecialChannelRoles is configured.");
+            }
         }
 
         return new ValidationResult(errors.Count == 0, errors);

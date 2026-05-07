@@ -70,7 +70,7 @@ public sealed class CleanupService
                 }
             }
 
-            // 3. Delete the role (if created)
+            // 3. Delete roles (category role + special channel roles)
             if (createdResources.RoleId.HasValue)
             {
                 var role = server.GetRole(createdResources.RoleId.Value);
@@ -84,6 +84,23 @@ public sealed class CleanupService
                     catch (Exception ex)
                     {
                         _log.LogWarning("⚠️  Failed to delete role {Id}: {Error}", createdResources.RoleId.Value, ex.Message);
+                    }
+                }
+            }
+
+            foreach (var extraRoleId in createdResources.AdditionalRoleIds)
+            {
+                var role = server.GetRole(extraRoleId);
+                if (role != null)
+                {
+                    try
+                    {
+                        await role.DeleteAsync();
+                        _log.LogInformation("✅ Deleted extra role: {Name} (ID: {Id})", role.Name, extraRoleId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.LogWarning("⚠️  Failed to delete extra role {Id}: {Error}", extraRoleId, ex.Message);
                     }
                 }
             }
@@ -103,5 +120,9 @@ public sealed class CleanupService
 /// </summary>
 /// <param name="CategoryId">The ID of the created category, if any.</param>
 /// <param name="Channels">The IDs of created channels.</param>
-/// <param name="RoleId">The ID of the created role, if any.</param>
-public record CreatedResources(ulong? CategoryId, IReadOnlyList<ulong> Channels, ulong? RoleId);
+/// <param name="RoleId">The ID of the created category role, if any.</param>
+public record CreatedResources(ulong? CategoryId, IReadOnlyList<ulong> Channels, ulong? RoleId)
+{
+    /// <summary>Extra roles created for special channel rules (not the main category role).</summary>
+    public IReadOnlyList<ulong> AdditionalRoleIds { get; init; } = Array.Empty<ulong>();
+}

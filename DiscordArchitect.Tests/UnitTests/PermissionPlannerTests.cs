@@ -77,4 +77,51 @@ public class PermissionPlannerTests
         category.Verify();
     }
 
+    [Fact]
+    public async Task GrantChannelRoleAsync_TextLikeChannel_AllowsViewAndSend()
+    {
+        var channel = new Mock<IGuildChannel>(MockBehavior.Strict);
+        var role = new Mock<IRole>(MockBehavior.Strict);
+
+        channel
+            .Setup(c => c.AddPermissionOverwriteAsync(
+                role.Object,
+                It.Is<OverwritePermissions>(p =>
+                    p.ViewChannel == PermValue.Allow &&
+                    p.SendMessages == PermValue.Allow),
+                null))
+            .Returns(Task.CompletedTask)
+            .Verifiable();
+
+        var sut = new PermissionPlanner();
+        await sut.GrantChannelRoleAsync(channel.Object, role.Object);
+
+        channel.Verify();
+    }
+
+    [Fact]
+    public async Task GrantChannelRoleAsync_VoiceChannel_AllowsViewConnectSpeak()
+    {
+        var channel = new Mock<IGuildChannel>(MockBehavior.Strict);
+        channel.As<IVoiceChannel>();
+
+        var role = new Mock<IRole>(MockBehavior.Strict);
+
+        channel
+            .Setup(c => c.AddPermissionOverwriteAsync(
+                role.Object,
+                It.Is<OverwritePermissions>(p =>
+                    p.ViewChannel == PermValue.Allow &&
+                    p.Connect == PermValue.Allow &&
+                    p.Speak == PermValue.Allow),
+                null))
+            .Returns(Task.CompletedTask)
+            .Verifiable();
+
+        var sut = new PermissionPlanner();
+        await sut.GrantChannelRoleAsync(channel.Object, role.Object);
+
+        channel.Verify();
+    }
+
 }

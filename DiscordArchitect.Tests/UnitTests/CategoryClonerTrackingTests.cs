@@ -27,6 +27,15 @@ public class CategoryClonerTrackingTests
         result.CategoryId.Should().Be(categoryId);
         result.Channels.Should().BeEquivalentTo(channels);
         result.RoleId.Should().Be(roleId);
+        result.AdditionalRoleIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CreatedResources_AdditionalRoleIds_CanBeSet()
+    {
+        var extras = new List<ulong> { 10, 20 };
+        var r = new CreatedResources(1, [2], 3) { AdditionalRoleIds = extras };
+        r.AdditionalRoleIds.Should().BeEquivalentTo(extras);
     }
 
     [Fact]
@@ -42,6 +51,7 @@ public class CategoryClonerTrackingTests
         result.CategoryId.Should().BeNull();
         result.Channels.Should().BeEquivalentTo(channels);
         result.RoleId.Should().BeNull();
+        result.AdditionalRoleIds.Should().BeEmpty();
     }
 
     [Fact]
@@ -58,5 +68,6 @@ public class CategoryClonerTrackingTests
         result.CategoryId.Should().Be(categoryId);
         result.Channels.Should().BeEmpty();
         result.RoleId.Should().BeNull();
+        result.AdditionalRoleIds.Should().BeEmpty();
     }
 }

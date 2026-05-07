@@ -15,6 +15,7 @@
   * **Announcement/News channels** (type 5).
   * **Voice channels** — name, bitrate, user limit.
   * **Forum channels** — name, topic, default sort order, and **available tags** (patched via Discord REST API v10).
+* 👥 **Optional per-channel roles** — `Discord:SpecialChannelRoles` can create an extra Discord role per matching channel (see below); the role is named `{NewCategoryName} {RoleSuffix}` and is granted **only on that cloned channel** (not on the whole category).
 * 🔒 **No secrets in Git** — `Discord:Token` and `Discord:ServerId` belong in **`dotnet user-secrets`** (or private env overrides), not in committed `appsettings.json`.
 
 ---
@@ -26,29 +27,37 @@ DiscordArchitect/
 ├─ Program.cs
 ├─ DiscordArchitect.csproj
 ├─ appsettings.json
+├─ Configuration/        — OptionsBuilder, ServiceConfiguration, command-line config helpers
 ├─ Options/
-│  └─ DiscordOptions.cs
+│  ├─ DiscordOptions.cs
+│  └─ SpecialChannelRoleOptions.cs
 ├─ Hosting/
 │  └─ DiscordHostedService.cs
-├─ Discord/
+├─ DiscordFactories/
 │  ├─ DiscordClientFactory.cs
 │  └─ RestClientFactory.cs
+├─ Logging/              — Serilog wiring, structured events
 ├─ Services/
 │  ├─ CategoryCloner.cs
+│  ├─ CleanupService.cs
+│  ├─ ConfigurationValidator.cs
+│  ├─ VerificationService.cs
 │  ├─ ForumTagService.cs
 │  ├─ PermissionPlanner.cs
 │  ├─ DiagnosticsService.cs
-│  └─ Prompt.cs
-└─ Utils/
-   └─ HttpExtensions.cs
+│  ├─ Prompt.cs
+│  └─ Pure/ChannelOrdering.cs
+└─ Utils/HttpExtensions.cs
 ```
 
 **Responsibilities**
 
 * `Program.cs` — builds the Host, wires DI, reads config (UserSecrets + appsettings), starts hosted service.
 * `DiscordHostedService` — logs in the bot, waits for Gateway **Ready**, prompts for a new category name, calls `CategoryCloner`.
-* `CategoryCloner` — core logic: find template, create target category, toggles (role/@everyone), clone channels in order, apply forum tags.
-* `PermissionPlanner` — minimal helpers to set category overwrites (bot, @everyone, optional per‑category role).
+* `CategoryCloner` — core logic: find template, create target category, toggles (role/@everyone), optional per‑category role, clone channels in order, optional **special roles** for configured channel names, apply forum tags.
+* `PermissionPlanner` — helpers for category/channel overwrites (bot, @everyone, per‑category role, per‑channel special role).
+* `ConfigurationValidator` — validates required Discord settings before startup.
+* `VerificationService` & `CleanupService` — post‑run checks and test‑mode teardown (including **extra** special roles).
 * `ForumTagService` — PATCH `/api/v10/channels/{id}` with `available_tags`.
 * `DiagnosticsService` — prints bot guild permissions & role stack.
 * `DiscordClientFactory` & `RestClientFactory` — construct `DiscordSocketClient` and preconfigured `HttpClient`.
@@ -167,12 +176,30 @@ dotnet user-secrets set "Discord:ServerId" "123456789012345678"
     "CreateRolePerCategory": true,
     "EveryoneAccessToNewCategory": false,
     "SyncChannelsToCategory": true,
-    "TestMode": false
+    "TestMode": false,
+    "Verbose": false,
+    "JsonOutput": false,
+    "SpecialChannelRoles": [
+      {
+        "ChannelName": "🐛・testing",
+        "RoleSuffix": "Testers"
+      }
+    ]
   }
 }
 ```
 
 (Later configuration sources override earlier ones; see [`DiscordArchitect/Program.cs`](DiscordArchitect/Program.cs).)
+
+### `SpecialChannelRoles` (optional extra roles)
+
+When you clone a category, any **source** channel whose **name** equals `ChannelName` (exact string match, case‑sensitive / ordinal — same rule as category lookup) triggers:
+
+1. After the new channel is created and after `SyncPermissionsAsync()` (if enabled), a new role is created: **`{your new category name} {RoleSuffix}`** (e.g. `Sprint42 Testers`).
+2. That role gets a **channel‑only** permission overwrite (not the parent category): text‑like channels get *View* + *Send*; voice gets *View* + *Connect* + *Speak*.
+3. The bot still needs **Manage Roles** (see invite presets above). Listing this section in config enables validation: each entry must have non‑empty `ChannelName` and `RoleSuffix`.
+
+Remove the array or set it to `[]` if you do not need this behavior. Rename a template channel in Discord → update `ChannelName` to match.
 
 ### 5) NuGet packages
 
@@ -215,7 +242,7 @@ The app will:
 
 When running in test mode (`--test-mode` or `TestMode: true` in configuration):
 
-1. **Resource Tracking**: All created resources (category, channels, role) are tracked
+1. **Resource Tracking**: All created resources (category, channels, main category role, and any **special** roles from `SpecialChannelRoles`) are tracked
 2. **Post-Run Verification**: Automatic verification that all resources exist and have correct permissions
 3. **Verification Prompt**: After creation, you'll be asked to verify resources in Discord
 4. **Cleanup Option**: You can choose to delete all created resources automatically
@@ -369,6 +396,8 @@ Discord throttles bursts; the client handles it. Large templates may take a bit.
 
 ## Example `appsettings.json`
 
+Use the committed [`DiscordArchitect/appsettings.json`](DiscordArchitect/appsettings.json) as the source of truth for keys such as `Verbose`, `JsonOutput`, and `SpecialChannelRoles`. Minimal shape:
+
 ```json
 {
   "Discord": {
@@ -376,7 +405,10 @@ Discord throttles bursts; the client handles it. Large templates may take a bit.
     "CreateRolePerCategory": true,
     "EveryoneAccessToNewCategory": false,
     "SyncChannelsToCategory": true,
-    "TestMode": false
+    "TestMode": false,
+    "Verbose": false,
+    "JsonOutput": false,
+    "SpecialChannelRoles": []
   }
 }
 ```
@@ -398,6 +430,9 @@ dotnet user-secrets init
 # Set secrets
 dotnet user-secrets set "Discord:Token" "YOUR_BOT_TOKEN"
 dotnet user-secrets set "Discord:ServerId" "123456789012345678"
+
+# Tests
+dotnet test DiscordArchitect.Tests/DiscordArchitect.Tests.csproj
 ```
 
 Happy cloning.

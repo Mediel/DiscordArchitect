@@ -231,6 +231,28 @@ public class ConfigurationValidatorTests
     }
 
     [Fact]
+    public void Validate_WithBlankSpecialChannelRoleFields_ReturnsInvalidResult()
+    {
+        var configData = new Dictionary<string, string?>
+        {
+            ["Discord:Token"] = "fake-discord-token-for-testing-only-123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890",
+            ["Discord:ServerId"] = "123456789012345678",
+            ["Discord:SourceCategoryName"] = "Template",
+            ["Discord:SpecialChannelRoles:0:ChannelName"] = " ",
+            ["Discord:SpecialChannelRoles:0:RoleSuffix"] = " ",
+        };
+
+        var config = CreateConfiguration(configData);
+        var validator = new ConfigurationValidator(config);
+
+        var result = validator.Validate();
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.Contains("ChannelName is required when SpecialChannelRoles is configured."));
+        result.Errors.Should().Contain(e => e.Contains("RoleSuffix is required when SpecialChannelRoles is configured."));
+    }
+
+    [Fact]
     public void Validate_WithMultipleErrors_ReturnsAllErrors()
     {
         // Arrange

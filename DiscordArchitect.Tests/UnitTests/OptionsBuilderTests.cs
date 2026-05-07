@@ -69,6 +69,24 @@ public sealed class OptionsBuilderTests : IDisposable
     }
 
     [Fact]
+    public void BuildDiscordOptions_ReadsSpecialChannelRolesFromConfig()
+    {
+        var config = Config(new Dictionary<string, string?>
+        {
+            ["Discord:Token"] = "fake-discord-token-for-testing-only-123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890",
+            ["Discord:ServerId"] = "987654321098765432",
+            ["Discord:SpecialChannelRoles:0:ChannelName"] = "bugs",
+            ["Discord:SpecialChannelRoles:0:RoleSuffix"] = "Testers",
+        });
+
+        var options = OptionsBuilder.BuildDiscordOptions(config, verbose: false);
+
+        options.SpecialChannelRoles.Should().ContainSingle();
+        options.SpecialChannelRoles[0].ChannelName.Should().Be("bugs");
+        options.SpecialChannelRoles[0].RoleSuffix.Should().Be("Testers");
+    }
+
+    [Fact]
     public void BuildDiscordOptions_WithDiscordArchitectAutoCleanupEnv_ForcesTestModeAndAutoCleanup()
     {
         Environment.SetEnvironmentVariable("DISCORD_ARCHITECT_AUTO_CLEANUP", "true");
